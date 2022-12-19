@@ -1,0 +1,90 @@
+import groovyx.net.http.HTTPBuilder
+import static groovyx.net.http.ContentType.JSON
+import static groovyx.net.http.Method.GET
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'de.undercouch.download'
+}
+task getFlavorsFromServer {
+    def http = new HTTPBuilder("https://mocki.io/v1/2de4bfed-f042-4bae-b2c5-e06303e0e6ae")
+    http.request(GET,JSON) { req ->
+        response.success = { resp, json ->
+            println resp.statusLine
+            println json
+            getFlavorsFromServer.ext.data = json
+        }
+    }
+}
+
+def getFlavorsIcon(ArrayList flavorsArray) {
+    flavorsArray.each { item ->
+        {
+            def srcFolder = new File("${project.rootDir}/app/src/"+item.flavor+"/res/drawable/")
+            if (!srcFolder.exists()) {
+                srcFolder.mkdirs()
+            }
+            if (item.app_icon_url != null && item.app_icon_url != "") {
+               download.run {
+                    src item.app_icon_url
+                    overwrite true
+                    dest "${project.rootDir}/app/src/"+item.flavor+"/res/drawable/ic_launcher.png"
+                }
+            }
+        }
+    }
+}
+
+android {
+    namespace 'com.example.dynamicflavors'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "com.example.dynamicflavors"
+        minSdk 21
+        targetSdk 33
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    flavorDimensions "dynamicflavors"
+    productFlavors {
+        getFlavorsFromServer
+        def flavorsArray = getFlavorsFromServer.ext.data.flavors
+        flavorsArray.each { item -> {
+            "$item.flavor" {
+                applicationId "${android.defaultConfig.applicationId}.${item.flavor}"
+                versionCode item.versionCode
+                versionName item.versionName
+                resValue "string", "app_name", item.app_title
+                ext {
+                    appName = item.app_title
+                }
+             }
+         }
+       }
+        getFlavorsIcon(flavorsArray)
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.appcompat:appcompat:1.5.1'
+    implementation 'com.google.android.material:material:1.7.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}
+
+
